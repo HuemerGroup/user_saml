@@ -107,6 +107,7 @@ if ($user !== null) {
 	}
 }
 
+$ssoDefaultLogin = OC::$server->getConfig()->getSystemValue('sso_default_login', true);
 // All requests that are not authenticated and match against the "/login" route are
 // redirected to the SAML login endpoint
 if(!$cli &&
