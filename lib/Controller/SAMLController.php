@@ -358,6 +358,7 @@ class SAMLController extends Controller {
 	 * @PublicPage
 	 * @NoAdminRequired
 	 * @NoCSRFRequired
+	 * @NoCSRFRequired
 	 *
 	 * @return Http\RedirectResponse
 	 * @throws Error
@@ -422,7 +423,15 @@ class SAMLController extends Controller {
 	 * @OnlyUnauthenticatedUsers
 	 */
 	public function notProvisioned() {
-		return new Http\TemplateResponse($this->appName, 'notProvisioned', [], 'guest');
+		$ssoDefaultLogin = \OC::$server->getConfig()->getSystemValue('sso_default_login', true);
+		if($ssoDefaultLogin === true){
+			$location = $this->urlGenerator->getAbsoluteURL('/index.php/login?local');
+		}else{
+			$location = $this->urlGenerator->getAbsoluteURL('/index.php');
+		}
+		header('Location: ' . $location);
+		exit();
+		//return new Http\TemplateResponse($this->appName, 'notProvisioned', [], 'guest');
 	}
 
 
@@ -449,21 +458,52 @@ class SAMLController extends Controller {
 	 */
 	public function selectUserBackEnd($redirectUrl) {
 
-		$attributes = ['loginUrls' => []];
+		if(\OC::$server->getConfig()->getSystemValue('local_default_direct_login', true) === true)
+		{
+			if(\OC::$server->getConfig()->getSystemValue('sso_multiple_idp', false) === true) {
+				$idps = $this->SAMLSettings->getListOfIdps();
+				$idps = $idps[0];
+			}else {
+				$idps = $this->SAMLSettings->getListOfIdps();
+			}
+			if (!$_GET['local']) {
+				return new Http\RedirectResponse($this->getSSOUrl($redirectUrl));
+			} else {
+				$loginUrls = [
+					'directLogin' => [
+						'url' => $this->getDirectLoginUrl(),
+						'display-name' => $this->l->t('Direct log in')
+					],
+					'ssoLogin' => [
+						'url' => $this->getSSOUrl($redirectUrl,$idps),
+						'display-name' => $this->getSSODisplayName(),
+					]
+				];
+			}
+		}else{
+			$attributes = ['loginUrls' => []];
 
-		if ($this->SAMLSettings->allowMultipleUserBackEnds()) {
-			$attributes['loginUrls']['directLogin'] = [
-				'url' => $this->getDirectLoginUrl($redirectUrl),
-				'display-name' => $this->l->t('Direct log in')
-			];
+			if ($this->SAMLSettings->allowMultipleUserBackEnds()) {
+				$attributes['loginUrls']['directLogin'] = [
+					'url' => $this->getDirectLoginUrl($redirectUrl),
+					'display-name' => $this->l->t('Direct log in')
+				];
+			}
+
+			if ($this->SAMLSettings->allowMultipleUserBackEnds()) {
+				$attributes['loginUrls']['directLogin'] = [
+					'url' => $this->getDirectLoginUrl($redirectUrl),
+					'display-name' => $this->l->t('Direct log in')
+				];
+			}
+
+			$attributes['loginUrls']['ssoLogin'] = $this->getIdps($redirectUrl);
+
+			$attributes['useCombobox'] = count($attributes['loginUrls']['ssoLogin']) > 4 ? true : false;
+
+
+			return new Http\TemplateResponse($this->appName, 'selectUserBackEnd', $attributes, 'guest');
 		}
-
-		$attributes['loginUrls']['ssoLogin'] = $this->getIdps($redirectUrl);
-
-		$attributes['useCombobox'] = count($attributes['loginUrls']['ssoLogin']) > 4 ? true : false;
-
-
-		return new Http\TemplateResponse($this->appName, 'selectUserBackEnd', $attributes, 'guest');
 	}
 
 	/**
